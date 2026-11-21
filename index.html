@@ -3,190 +3,433 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SPACE SHOOTER</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>SPACE SHOOTER 🚀</title>
 <style>
 *{box-sizing:border-box}
 body{
  margin:0;background:#050817;color:white;
- font-family:Arial;text-align:center;
- overflow:hidden;
+ text-align:center;font-family:Arial;
 }
-h1{color:#42e8ff;margin:12px 0}
-#info{font-size:18px;margin:8px}
+h1{color:#42e8ff;margin:12px}
+#info{font-size:19px;margin:10px}
+button{
+ background:#0879ed;color:white;border:0;
+ border-radius:14px;padding:14px 30px;
+ font-size:21px;margin:8px;
+}
+#start{
+ background:#13a85a;width:85%;max-width:350px;
+}
 canvas{
- background:linear-gradient(#080d29,#151044);
- border:2px solid #42e8ff;
- border-radius:12px;
- width:min(96vw,500px);
- height:auto;
+ display:block;margin:auto;
+ width:96vw;max-width:500px;
+ height:65vh;max-height:650px;min-height:400px;
+ background:linear-gradient(#080d29,#171044);
+ border:3px solid #42e8ff;border-radius:14px;
  touch-action:none;
 }
-.controls{margin:12px}
-button{
- background:#1266cc;color:white;border:0;
- padding:14px 25px;border-radius:12px;
- font-size:19px;margin:5px;
-}
-#message{font-size:20px;color:#ffe66d}
+#message{color:#ffe66d;margin:10px}
+small{color:#aaa}
 </style>
 </head>
 <body>
+
 <h1>🚀 SPACE SHOOTER</h1>
+
 <div id="info">
- ⭐ Очки: <span id="score">0</span>
- &nbsp; ❤️ Життя: <span id="lives">3</span>
+⭐ Очки: <span id="score">0</span>
+❤️ Життя: <span id="lives">3</span>
 </div>
-<canvas id="game" width="400" height="600"></canvas>
-<div class="controls">
-<button id="left">⬅️</button>
-<button id="shoot">🔥 ВОГОНЬ</button>
-<button id="right">➡️</button>
-</div>
-<div id="message">Натисни СТАРТ!</div>
+
 <button id="start">▶ СТАРТ</button>
+
+<canvas id="game" width="400" height="600"></canvas>
+
+<div id="message">Натисни СТАРТ!</div>
+<small>☝️ Веди пальцем — рухайся. Торкайся — стріляй!</small>
 
 <script>
 const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
-const scoreText=document.getElementById("score");
-const livesText=document.getElementById("lives");
+
+const scoreEl=document.getElementById("score");
+const livesEl=document.getElementById("lives");
 const message=document.getElementById("message");
+const startBtn=document.getElementById("start");
 
-let player={x:180,y:520,w:40,h:45};
-let bullets=[],enemies=[],stars=[];
-let score=0,lives=3,running=false;
-let left=false,right=false,shooting=false;
-let lastShot=0,spawnTimer=0;
+let player={x:200,y:530};
 
-for(let i=0;i<70;i++){
- stars.push({x:Math.random()*400,y:Math.random()*600,
- speed:1+Math.random()*3});
+let bullets=[];
+let enemyBullets=[];
+let meteors=[];
+let enemies=[];
+let stars=[];
+
+let score=0;
+let lives=3;
+let running=false;
+
+let targetX=200;
+let targetY=530;
+
+let lastEnemy=0;
+let lastMeteor=0;
+let lastShot=0;
+let lastDamage=0;
+let gameStart=0;
+
+let finger=false;
+
+for(let i=0;i<90;i++){
+ stars.push({
+  x:Math.random()*400,
+  y:Math.random()*600,
+  speed:1+Math.random()*2
+ });
 }
 
-function drawPlayer(){
- ctx.font="38px Arial";
- ctx.textAlign="center";
- ctx.fillText("🚀",player.x+20,player.y+35);
+// Складність
+function difficulty(){
+ return Math.min(5,(Date.now()-gameStart)/30000);
 }
 
+// Зорі
 function drawStars(){
  ctx.fillStyle="white";
  stars.forEach(s=>{
   ctx.fillRect(s.x,s.y,2,2);
-  s.y+=s.speed;
-  if(s.y>600){s.y=0;s.x=Math.random()*400;}
+  s.y+=s.speed*(1+difficulty()*0.12);
+  if(s.y>600){
+   s.y=0;
+   s.x=Math.random()*400;
+  }
  });
 }
 
+// Гравець
+function drawPlayer(){
+ ctx.font="40px Arial";
+ ctx.textAlign="center";
+ ctx.fillText("🚀",player.x,player.y+14);
+}
+
+// Постріл
 function shoot(){
  let now=Date.now();
  if(now-lastShot>250){
-  bullets.push({x:player.x+18,y:player.y});
+  bullets.push({
+   x:player.x,
+   y:player.y-25
+  });
   lastShot=now;
  }
 }
 
-function spawnEnemy(){
- let x=Math.random()*350;
- enemies.push({x,y:-45,speed:2+Math.random()*2});
+// Метеорити
+function spawnMeteor(){
+ let d=difficulty();
+ meteors.push({
+  x:20+Math.random()*360,
+  y:-40,
+  speed:2+Math.random()*2+d*0.5,
+  hp:3,
+  size:30
+ });
 }
 
-function draw(){
+// Ворожі кораблі
+function spawnEnemy(){
+ let d=difficulty();
+ enemies.push({
+  x:30+Math.random()*340,
+  y:-45,
+  speed:1.5+Math.random()*1.5+d*0.3,
+  lastShot:Date.now()+1000
+ });
+}
+
+// Ворожий постріл
+function enemyShoot(e){
+ let dx=player.x-e.x;
+ let dy=player.y-e.y;
+ let length=Math.sqrt(dx*dx+dy*dy)||1;
+
+ enemyBullets.push({
+  x:e.x,
+  y:e.y,
+  vx:dx/length*3,
+  vy:dy/length*3
+ });
+}
+
+// Втрата життя
+function hit(){
+ if(Date.now()-lastDamage<900)return;
+ lives--;
+ livesEl.textContent=lives;
+ lastDamage=Date.now();
+}
+
+// Постріли гравця
+function drawBullets(){
+ ctx.fillStyle="#42e8ff";
+
+ for(let i=bullets.length-1;i>=0;i--){
+  let b=bullets[i];
+  b.y-=10;
+  ctx.fillRect(b.x-3,b.y,6,18);
+  if(b.y<0)bullets.splice(i,1);
+ }
+}
+
+// Постріли ворогів
+function drawEnemyBullets(){
+ ctx.fillStyle="#ff4545";
+
+ for(let i=enemyBullets.length-1;i>=0;i--){
+  let b=enemyBullets[i];
+  b.x+=b.vx;
+  b.y+=b.vy;
+
+  ctx.beginPath();
+  ctx.arc(b.x,b.y,6,0,Math.PI*2);
+  ctx.fill();
+
+  if(Math.abs(b.x-player.x)<20 &&
+     Math.abs(b.y-player.y)<25){
+   enemyBullets.splice(i,1);
+   hit();
+   continue;
+  }
+
+  if(b.x<0||b.x>400||b.y<0||b.y>600){
+   enemyBullets.splice(i,1);
+  }
+ }
+}
+
+// Метеорити з міцністю 3
+function drawMeteors(){
+ for(let i=meteors.length-1;i>=0;i--){
+  let m=meteors[i];
+
+  m.y+=m.speed*(1+difficulty()*0.08);
+
+  ctx.font="32px Arial";
+  ctx.textAlign="center";
+  ctx.fillText("☄️",m.x,m.y);
+
+  // Показ міцності
+  ctx.font="12px Arial";
+  ctx.fillStyle="white";
+  ctx.fillText("".repeat(m.hp),m.x,m.y-22);
+
+  // Влучання лазером
+  for(let j=bullets.length-1;j>=0;j--){
+   let b=bullets[j];
+
+   if(Math.abs(b.x-m.x)<25 &&
+      Math.abs(b.y-m.y)<25){
+
+    bullets.splice(j,1);
+    m.hp--;
+
+    if(m.hp<=0){
+     meteors.splice(i,1);
+     score+=5;
+     scoreEl.textContent=score;
+    }
+    break;
+   }
+  }
+
+  if(i>=meteors.length)continue;
+
+  // Зіткнення з гравцем
+  if(Math.abs(m.x-player.x)<28 &&
+     Math.abs(m.y-player.y)<28){
+   meteors.splice(i,1);
+   hit();
+   continue;
+  }
+
+  if(m.y>640)meteors.splice(i,1);
+ }
+}
+
+// Ворожі кораблі
+function drawEnemies(){
+ for(let i=enemies.length-1;i>=0;i--){
+  let e=enemies[i];
+
+  e.y+=e.speed*(1+difficulty()*0.05);
+  e.x+=Math.sin(e.y/35)*1.5;
+
+  ctx.font="34px Arial";
+  ctx.textAlign="center";
+  ctx.fillText("👾",e.x,e.y);
+
+  if(Date.now()-e.lastShot>1400){
+   enemyShoot(e);
+   e.lastShot=Date.now();
+  }
+
+  let destroyed=false;
+
+  for(let j=bullets.length-1;j>=0;j--){
+   let b=bullets[j];
+
+   if(Math.abs(b.x-e.x)<27 &&
+      Math.abs(b.y-e.y)<25){
+
+    bullets.splice(j,1);
+    enemies.splice(i,1);
+    score+=20;
+    scoreEl.textContent=score;
+    destroyed=true;
+    break;
+   }
+  }
+
+  if(destroyed)continue;
+
+  if(Math.abs(e.x-player.x)<28 &&
+     Math.abs(e.y-player.y)<28){
+   enemies.splice(i,1);
+   hit();
+   continue;
+  }
+
+  if(e.y>640)enemies.splice(i,1);
+ }
+}
+
+// Головний цикл
+function loop(){
  ctx.clearRect(0,0,400,600);
  drawStars();
 
- if(left)player.x-=5;
- if(right)player.x+=5;
- player.x=Math.max(0,Math.min(360,player.x));
+ if(running){
 
- if(shooting)shoot();
+  player.x+=(targetX-player.x)*0.3;
+  player.y+=(targetY-player.y)*0.3;
 
- drawPlayer();
+  player.x=Math.max(20,Math.min(380,player.x));
+  player.y=Math.max(280,Math.min(570,player.y));
 
- ctx.fillStyle="#42e8ff";
- bullets.forEach((b,i)=>{
-  b.y-=8;
-  ctx.fillRect(b.x,b.y,5,15);
-  if(b.y<0)bullets.splice(i,1);
- });
+  drawPlayer();
+  drawBullets();
+  drawMeteors();
+  drawEnemies();
+  drawEnemyBullets();
 
- enemies.forEach((e,i)=>{
-  e.y+=e.speed;
-  ctx.font="32px Arial";
-  ctx.fillText("👾",e.x,e.y+30);
+  let now=Date.now();
+  let d=difficulty();
 
-  if(e.y>560){
-   enemies.splice(i,1);
-   lives--;
-   livesText.textContent=lives;
+  // Більше метеоритів
+  let meteorDelay=Math.max(180,400-d*35);
+
+  if(now-lastMeteor>meteorDelay){
+   spawnMeteor();
+   lastMeteor=now;
   }
 
-  bullets.forEach((b,j)=>{
-   if(b.x>e.x-25&&b.x<e.x+25&&
-      b.y>e.y-25&&b.y<e.y+30){
-    enemies.splice(i,1);
-    bullets.splice(j,1);
-    score+=10;
-    scoreText.textContent=score;
-   }
-  });
- });
+  // Ворожі кораблі раз на 9-12 секунд
+  let enemyDelay=9000+Math.random()*3000;
 
- if(lives<=0){
-  running=false;
-  message.textContent="💥 ГРУ ЗАВЕРШЕНО! Очки: "+score;
-  return;
+  if(now-lastEnemy>enemyDelay){
+   spawnEnemy();
+   lastEnemy=now;
+  }
+
+  if(lives<=0){
+   running=false;
+   message.textContent="💥 ГРУ ЗАВЕРШЕНО! Очки: "+score;
+   startBtn.textContent="🔄 ГРАТИ ЗНОВУ";
+  }
  }
 
- spawnTimer++;
- if(spawnTimer>55){
-  spawnEnemy();
-  spawnTimer=0;
- }
-
- if(running)requestAnimationFrame(draw);
+ requestAnimationFrame(loop);
 }
 
+// Початок гри
 function startGame(){
- player.x=180;
- bullets=[];enemies=[];
- score=0;lives=3;
- scoreText.textContent=score;
- livesText.textContent=lives;
- message.textContent="Знищуй ворогів!";
+ score=0;
+ lives=3;
+
+ bullets=[];
+ enemyBullets=[];
+ meteors=[];
+ enemies=[];
+
+ player.x=200;
+ player.y=530;
+
+ targetX=200;
+ targetY=530;
+
+ lastDamage=0;
+ lastShot=0;
+
+ gameStart=Date.now();
+ lastMeteor=Date.now();
+ lastEnemy=Date.now();
+
+ scoreEl.textContent=0;
+ livesEl.textContent=3;
+
+ message.textContent="🚀 Ухиляйся і знищуй ворогів!";
+ startBtn.textContent="🔄 ПЕРЕЗАПУСТИТИ";
+
+ finger=false;
  running=true;
- spawnTimer=0;
- draw();
 }
 
-document.getElementById("start").onclick=startGame;
+// Рух пальцем
+function move(e){
+ const r=canvas.getBoundingClientRect();
 
-function hold(id,callback){
- let el=document.getElementById(id);
- el.addEventListener("pointerdown",e=>{
-  e.preventDefault();callback(true);
- });
- el.addEventListener("pointerup",()=>callback(false));
- el.addEventListener("pointerleave",()=>callback(false));
- el.addEventListener("pointercancel",()=>callback(false));
+ targetX=(e.clientX-r.left)/r.width*400;
+ targetY=(e.clientY-r.top)/r.height*600;
+
+ targetX=Math.max(20,Math.min(380,targetX));
+ targetY=Math.max(280,Math.min(570,targetY));
 }
 
-hold("left",v=>left=v);
-hold("right",v=>right=v);
-hold("shoot",v=>shooting=v);
+canvas.addEventListener("pointerdown",e=>{
+ if(!running)return;
 
+ finger=true;
+ canvas.setPointerCapture(e.pointerId);
+ move(e);
+ shoot();
+});
+
+canvas.addEventListener("pointermove",e=>{
+ if(finger&&running)move(e);
+});
+
+canvas.addEventListener("pointerup",()=>{
+ finger=false;
+});
+
+canvas.addEventListener("pointercancel",()=>{
+ finger=false;
+});
+
+// Клавіатура
 document.addEventListener("keydown",e=>{
- if(e.key==="ArrowLeft"||e.key==="a")left=true;
- if(e.key==="ArrowRight"||e.key==="d")right=true;
- if(e.code==="Space")shooting=true;
+ if(e.key==="ArrowLeft")targetX-=25;
+ if(e.key==="ArrowRight")targetX+=25;
+ if(e.key==="ArrowUp")targetY-=25;
+ if(e.key==="ArrowDown")targetY+=25;
+ if(e.code==="Space"&&running)shoot();
 });
-document.addEventListener("keyup",e=>{
- if(e.key==="ArrowLeft"||e.key==="a")left=false;
- if(e.key==="ArrowRight"||e.key==="d")right=false;
- if(e.code==="Space")shooting=false;
-});
+
+startBtn.addEventListener("click",startGame);
+
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
-9
